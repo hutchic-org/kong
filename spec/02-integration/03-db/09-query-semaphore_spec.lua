@@ -1,7 +1,7 @@
 local helpers = require "spec.helpers"
 local cjson = require "cjson"
 
-describe("#postgres Postgres query locks", function()
+describe("Postgres query locks", function()
   local client
 
   setup(function()

@@ -25,7 +25,7 @@ local fixtures = {
 }
 
 
-describe("#postgres upstream keepalive", function()
+describe("upstream keepalive", function()
   local proxy_client
 
   local function start_kong(opts)
