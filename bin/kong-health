@@ -49,7 +49,7 @@ end
 
 
 local lapp = [[
-Usage: kong health [OPTIONS]
+Usage: kong-health [OPTIONS]
 Check if the necessary services are running for this node.
 Options:
  -p,--prefix      (optional string) prefix at which Kong should be running
@@ -75,3 +75,5 @@ end
 
 
 run(arg)
+
+-- vim: set ft=lua ts=2 sw=2 sts=2 et :

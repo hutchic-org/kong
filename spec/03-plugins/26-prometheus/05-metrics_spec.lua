@@ -21,7 +21,6 @@ fixtures.dns_mock:A{
   address = "127.0.0.1"
 }
 
-local status_api_port = helpers.get_available_port()
 local UUID_PATTERN = "%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x"
 
 
@@ -30,8 +29,11 @@ for _, strategy in helpers.each_strategy() do
     local bp
     local admin_ssl_client -- admin_ssl_client (lua-resty-http) does not support h2
     local proxy_ssl_client -- proxy_ssl_client (lua-resty-http) does not support h2
+    local status_api_port
 
     setup(function()
+      status_api_port = helpers.get_available_port()
+
       bp = helpers.get_db_utils(strategy, {"services", "routes", "plugins"})
 
       local mock_ssl_service = bp.services:insert{
@@ -63,6 +65,25 @@ for _, strategy in helpers.each_strategy() do
           id = status_api_ssl_service.id
         }
       }
+
+      local route1 = bp.routes:insert{
+        name = "serverless",
+        protocols = {"https"},
+        hosts = {"status.example.com"},
+        paths = {"/serverless"},
+        no_service = true,
+      }
+
+      assert(bp.plugins:insert {
+        name = "request-termination",
+        route = { id = route1.id },
+        config = {
+          status_code = 200,
+          message = "request terminated by request-termination plugin",
+          echo = true,
+        },
+      })
+
 
       bp.plugins:insert{
         name = "prometheus", -- globally enabled
@@ -139,7 +160,7 @@ for _, strategy in helpers.each_strategy() do
 
         assert.matches('kong_nginx_metric_errors_total 0', body, nil, true)
 
-        return body:find('http_requests_total{service="mock-ssl-service",route="mock-ssl-route",code="400",source="service",consumer=""} 1',
+        return body:find('http_requests_total{service="mock-ssl-service",route="mock-ssl-route",code="400",source="service",workspace="default",consumer=""} 1',
           nil, true)
       end)
     end)
@@ -156,6 +177,39 @@ for _, strategy in helpers.each_strategy() do
 
       assert.matches('kong_nginx_metric_errors_total 0', body, nil, true)
       assert.matches('kong_nginx_connections_total{node_id="' .. UUID_PATTERN .. '",subsystem="' .. ngx.config.subsystem .. '",state="%w+"} %d+', body)
+    end)
+
+    it("expose metrics in no service route", function()
+      local res = assert(proxy_ssl_client:send{
+        method = "GET",
+        path = "/serverless",
+        headers = {
+          ["Host"] = "status.example.com"
+        }
+      })
+      assert.res_status(200, res)
+
+      local res = assert(proxy_ssl_client:send{
+        method = "GET",
+        path = "/metrics",
+        headers = {
+          ["Host"] = "status.example.com"
+        }
+      })
+      assert.res_status(200, res)
+
+      helpers.wait_until(function()
+        local res = assert(admin_ssl_client:send{
+          method = "GET",
+          path = "/metrics"
+        })
+        local body = assert.res_status(200, res)
+
+        assert.matches('kong_nginx_metric_errors_total 0', body, nil, true)
+
+        return body:find('kong_http_requests_total{service="",route="serverless",code="200",source="kong",workspace="default",consumer=""} 1',
+          nil, true)
+      end)
     end)
 
   end)

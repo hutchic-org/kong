@@ -1,5 +1,5 @@
 local helpers         = require "spec.helpers"
-local utils           = require "kong.tools.utils"
+local uuid            = require "kong.tools.uuid"
 local schema_def = require "kong.plugins.oauth2.schema"
 local DAO_MAX_TTL = require("kong.constants").DATABASE.DAO_MAX_TTL
 local v = require("spec.helpers").validate_plugin_config_schema
@@ -9,18 +9,24 @@ local fmt = string.format
 for _, strategy in helpers.each_strategy() do
 
   describe(fmt("Plugin: oauth2 [#%s] (schema)", strategy), function()
-    local bp, db = helpers.get_db_utils(strategy, {
-      "routes",
-      "services",
-      "consumers",
-      "plugins",
-      "oauth2_tokens",
-      "oauth2_authorization_codes",
-      "oauth2_credentials",
-    })
+    local bp, db
+    local oauth2_authorization_codes_schema
+    local oauth2_tokens_schema
 
-    local oauth2_authorization_codes_schema = db.oauth2_authorization_codes.schema
-    local oauth2_tokens_schema = db.oauth2_tokens.schema
+    lazy_setup(function()
+      bp, db = helpers.get_db_utils(strategy, {
+        "routes",
+        "services",
+        "consumers",
+        "plugins",
+        "oauth2_tokens",
+        "oauth2_authorization_codes",
+        "oauth2_credentials",
+      })
+
+      oauth2_authorization_codes_schema = db.oauth2_authorization_codes.schema
+      oauth2_tokens_schema = db.oauth2_tokens.schema
+    end)
 
     it("does not require `scopes` when `mandatory_scope` is false", function()
       local ok, errors = v({enable_authorization_code = true, mandatory_scope = false}, schema_def)
@@ -118,7 +124,7 @@ for _, strategy in helpers.each_strategy() do
 
         local ok, err_t = oauth2_tokens_schema:validate_insert({
           credential = { id = "foo" },
-          service = { id = utils.uuid() },
+          service = { id = uuid.uuid() },
           expires_in = 1,
         })
         assert.falsy(ok)
@@ -129,8 +135,8 @@ for _, strategy in helpers.each_strategy() do
 
 
         local ok, err_t = oauth2_tokens_schema:validate_insert({
-          credential = { id = utils.uuid() },
-          service = { id = utils.uuid() },
+          credential = { id = uuid.uuid() },
+          service = { id = uuid.uuid() },
           expires_in = 1,
           token_type = "bearer",
         })
@@ -152,7 +158,7 @@ for _, strategy in helpers.each_strategy() do
 
         local ok, err_t = oauth2_authorization_codes_schema:validate_insert({
           credential = { id = "foo" },
-          service = { id = utils.uuid() },
+          service = { id = uuid.uuid() },
         })
         assert.falsy(ok)
         assert.same({
@@ -160,8 +166,8 @@ for _, strategy in helpers.each_strategy() do
         }, err_t)
 
         local ok, err_t = oauth2_authorization_codes_schema:validate_insert({
-          credential = { id = utils.uuid() },
-          service = { id = utils.uuid() },
+          credential = { id = uuid.uuid() },
+          service = { id = uuid.uuid() },
         })
 
         assert.truthy(ok)
@@ -189,31 +195,31 @@ for _, strategy in helpers.each_strategy() do
           service = { id = service.id },
         })
 
-        token, err = db.oauth2_tokens:select({ id = token.id })
+        token, err = db.oauth2_tokens:select(token)
         assert.falsy(err)
         assert.truthy(token)
 
-        code, err = db.oauth2_authorization_codes:select({ id = code.id })
+        code, err = db.oauth2_authorization_codes:select(code)
         assert.falsy(err)
         assert.truthy(code)
 
-        ok, err, err_t = db.services:delete({ id = service.id })
+        ok, err, err_t = db.services:delete(service)
         assert.truthy(ok)
         assert.is_falsy(err_t)
         assert.is_falsy(err)
 
         -- no more service
-        service, err = db.services:select({ id = service.id })
+        service, err = db.services:select(service)
         assert.falsy(err)
         assert.falsy(service)
 
         -- no more token
-        token, err = db.oauth2_tokens:select({ id = token.id })
+        token, err = db.oauth2_tokens:select(token)
         assert.falsy(err)
         assert.falsy(token)
 
         -- no more code
-        code, err = db.oauth2_authorization_codes:select({ id = code.id })
+        code, err = db.oauth2_authorization_codes:select(code)
         assert.falsy(err)
         assert.falsy(code)
       end)

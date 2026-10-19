@@ -18,7 +18,7 @@ for _, strategy in helpers.each_strategy() do
       })
 
       local route = bp.routes:insert {
-        hosts = { "udp_logging.com" },
+        hosts = { "udp_logging.test" },
       }
 
       bp.plugins:insert {
@@ -31,7 +31,7 @@ for _, strategy in helpers.each_strategy() do
       }
 
       local route2 = bp.routes:insert {
-        hosts = { "custom_udp_logging.com" },
+        hosts = { "custom_udp_logging.test" },
       }
 
       bp.plugins:insert {
@@ -42,6 +42,9 @@ for _, strategy in helpers.each_strategy() do
           port   = UDP_PORT,
           custom_fields_by_lua = {
             new_field = "return 123",
+            ["nested.keys"] = "return 456",
+            ["escape\\.dots"] = "return 789",
+            ["nested.escape\\.dots"] = "return 135",
             route = "return nil", -- unset route field
           },
         },
@@ -113,7 +116,7 @@ for _, strategy in helpers.each_strategy() do
         method  = "GET",
         path    = "/delay/2",
         headers = {
-          host  = "udp_logging.com",
+          host  = "udp_logging.test",
         },
       })
 
@@ -147,7 +150,7 @@ for _, strategy in helpers.each_strategy() do
           method  = "GET",
           path    = "/delay/2",
           headers = {
-            host  = "custom_udp_logging.com",
+            host  = "custom_udp_logging.test",
           },
         })
 
@@ -160,6 +163,9 @@ for _, strategy in helpers.each_strategy() do
         -- Making sure it's alright
         local log_message = cjson.decode(res)
         assert.same(123, log_message.new_field)
+        assert.same(456, log_message.nested.keys)
+        assert.same(789, log_message["escape.dots"])
+        assert.same(135, log_message.nested["escape.dots"])
       end)
 
       it("unsets existing log values", function()
@@ -170,7 +176,7 @@ for _, strategy in helpers.each_strategy() do
           method  = "GET",
           path    = "/delay/2",
           headers = {
-            host  = "custom_udp_logging.com",
+            host  = "custom_udp_logging.test",
           },
         })
 
@@ -268,7 +274,7 @@ for _, strategy in helpers.each_strategy() do
         method  = "GET",
         path    = "/request",
         headers = {
-          host  = "udp_logging.com",
+          host  = "udp_logging.test",
         },
       })
       assert.response(res).has.status(200)

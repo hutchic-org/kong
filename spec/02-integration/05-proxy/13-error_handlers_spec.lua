@@ -3,16 +3,16 @@ local helpers = require "spec.helpers"
 for _, strategy in helpers.each_strategy() do
 describe("Proxy error handlers", function()
   local proxy_client
-  helpers.get_db_utils(strategy, {})
 
   lazy_setup(function()
+    helpers.get_db_utils(strategy, {})
     assert(helpers.start_kong {
       nginx_conf = "spec/fixtures/custom_nginx.template",
     })
   end)
 
   lazy_teardown(function()
-    helpers.stop_kong(nil, true)
+    helpers.stop_kong()
   end)
 
   before_each(function()
@@ -36,7 +36,7 @@ describe("Proxy error handlers", function()
     assert.res_status(400, res)
     local body = res:read_body()
     assert.matches("kong/", res.headers.server, nil, true)
-    assert.equal("Bad request\n", body)
+    assert.matches("Request header or cookie too large", body)
   end)
 
   it("Request For Routers With Trace Method Not Allowed", function ()
@@ -47,7 +47,7 @@ describe("Proxy error handlers", function()
     assert.res_status(405, res)
     local body = res:read_body()
     assert.matches("kong/", res.headers.server, nil, true)
-    assert.equal("Method not allowed\n", body)
+    assert.matches("Method not allowed\nrequest_id: %x+\n", body)
   end)
 end)
 end

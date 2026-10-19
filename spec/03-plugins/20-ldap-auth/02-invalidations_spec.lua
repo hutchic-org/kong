@@ -1,9 +1,12 @@
 local helpers = require "spec.helpers"
 local fmt = string.format
 local lower = string.lower
-local sha256_hex = require "kong.tools.utils".sha256_hex
+local sha256_hex = require("kong.tools.sha256").sha256_hex
 
-local ldap_host_aws = "ec2-54-172-82-117.compute-1.amazonaws.com"
+local ldap_host = os.getenv("KONG_SPEC_TEST_AD_SERVER_HOST") or "127.0.0.1"
+local ldap_port = tonumber(os.getenv("KONG_SPEC_TEST_AD_SERVER_PORT_389")) or 389
+local ldap_password = "pass:w2rd1111A$"
+local ldap_bind_dn = "cn=einstein,ou=scientists,dc=ldap,dc=mashape,dc=com"
 
 local ldap_strategies = {
   non_secure = { name = "non-secure", start_tls = false },
@@ -19,6 +22,7 @@ for _, ldap_strategy in pairs(ldap_strategies) do
         local plugin
 
         lazy_setup(function()
+          helpers.wait_for_ldap(ldap_host, ldap_port, ldap_bind_dn, ldap_password)
           local bp = helpers.get_db_utils(strategy, {
             "routes",
             "services",
@@ -26,18 +30,18 @@ for _, ldap_strategy in pairs(ldap_strategies) do
           })
 
           local route = bp.routes:insert {
-            hosts = { "ldapauth.com" },
+            hosts = { "ldapauth.test" },
           }
 
           plugin = bp.plugins:insert {
             route = { id = route.id },
             name     = "ldap-auth",
             config   = {
-              ldap_host = ldap_host_aws,
-              ldap_port = 389,
+              ldap_host = ldap_host,
+              ldap_port = ldap_port,
               start_tls = ldap_strategy.start_tls,
               base_dn   = "ou=scientists,dc=ldap,dc=mashape,dc=com",
-              attribute = "uid",
+              attribute = "cn",
               cache_ttl = 1,
             }
           }
@@ -63,7 +67,7 @@ for _, ldap_strategy in pairs(ldap_strategies) do
         end)
 
         lazy_teardown(function()
-          helpers.stop_kong(nil, true)
+          helpers.stop_kong()
         end)
 
         local function cache_key(conf, username, password)
@@ -86,7 +90,7 @@ for _, ldap_strategy in pairs(ldap_strategies) do
               path = "/requests",
               body = {},
               headers = {
-                ["HOST"] = "ldapauth.com",
+                ["HOST"] = "ldapauth.test",
                 authorization = "ldap " .. ngx.encode_base64("einstein:wrongpassword")
               }
             })
@@ -112,14 +116,14 @@ for _, ldap_strategy in pairs(ldap_strategies) do
               path = "/requests",
               body = {},
               headers = {
-                ["HOST"] = "ldapauth.com",
-                authorization = "ldap " .. ngx.encode_base64("einstein:password")
+                ["HOST"] = "ldapauth.test",
+                authorization = "ldap " .. ngx.encode_base64("einstein:" .. ldap_password)
               }
             })
             assert.res_status(200, res)
 
             -- Check that cache is populated
-            local cache_key = cache_key(plugin.config, "einstein", "password")
+            local cache_key = cache_key(plugin.config, "einstein", ldap_password)
 
             res = assert(admin_client:send {
               method = "GET",
@@ -129,7 +133,7 @@ for _, ldap_strategy in pairs(ldap_strategies) do
             assert.res_status(200, res)
           end)
           it("should invalidate cache once ttl expires", function()
-            local cache_key = cache_key(plugin.config, "einstein", "password")
+            local cache_key = cache_key(plugin.config, "einstein", ldap_password)
 
             helpers.wait_for_invalidation(cache_key)
           end)

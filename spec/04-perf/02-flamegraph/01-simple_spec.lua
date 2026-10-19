@@ -1,6 +1,7 @@
 local perf = require("spec.helpers.perf")
-local split = require("pl.stringx").split
+local splitn = require("kong.tools.string").splitn
 local utils = require("spec.helpers.perf.utils")
+local shell = require "resty.shell"
 
 perf.enable_charts(false) -- don't generate charts, we need flamegraphs only
 perf.use_defaults()
@@ -9,7 +10,7 @@ local versions = {}
 
 local env_versions = os.getenv("PERF_TEST_VERSIONS")
 if env_versions then
-  versions = split(env_versions, ",")
+  versions = splitn(env_versions, ",")
 end
 
 local LOAD_DURATION = 180
@@ -38,7 +39,7 @@ local wrk_script = [[
   end
 ]]
 
-os.execute("mkdir -p output")
+shell.run("mkdir -p output", nil, 0)
 
 for _, version in ipairs(versions) do
   describe("perf test for Kong " .. version .. " #simple #no_plugins", function()

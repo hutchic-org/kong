@@ -1,5 +1,6 @@
+local shell = require "resty.shell"
 local perf = require("spec.helpers.perf")
-local split = require("pl.stringx").split
+local splitn = require("kong.tools.string").splitn
 local utils = require("spec.helpers.perf.utils")
 local workspaces = require "kong.workspaces"
 local fmt = string.format
@@ -14,12 +15,12 @@ local versions = {}
 
 local env_versions = os.getenv("PERF_TEST_VERSIONS")
 if env_versions then
-  versions = split(env_versions, ",")
+  versions = splitn(env_versions, ",")
 end
 
 local LOAD_DURATION = 180
 
-os.execute("mkdir -p output")
+shell.run("mkdir -p output", nil, 0)
 
 local function patch(helpers, patch_interval)
   local status, bsize

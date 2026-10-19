@@ -1,12 +1,15 @@
 local isempty = require "table.isempty"
+local mime_type = require "kong.tools.mime_type"
 
 
 local kong = kong
 local type = type
-local find = string.find
-local lower = string.lower
 local match = string.match
 local noop = function() end
+local parse_mime_type = mime_type.parse_mime_type
+local mime_type_includes = mime_type.includes
+local isplitn = require("kong.tools.string").isplitn
+local strip = require("kong.tools.string").strip
 
 
 local _M = {}
@@ -36,12 +39,29 @@ end
 
 
 local function is_json_body(content_type)
-  return content_type and find(lower(content_type), "application/json", nil, true)
+  if not content_type then
+    return false
+  end
+  local expected_media_type = { type = "application", subtype = "json" }
+  for ct in isplitn(content_type, ",") do
+    local t, subtype = parse_mime_type(strip(ct))
+    if not t or not subtype then
+      goto continue
+    end
+    local media_type = { type = t, subtype = subtype }
+    if mime_type_includes(expected_media_type, media_type) then
+      return true
+    end
+    ::continue::
+  end
+
+  return false
 end
 
 
 local function is_body_transform_set(conf)
   return not isempty(conf.add.json    ) or
+         not isempty(conf.rename.json ) or
          not isempty(conf.remove.json ) or
          not isempty(conf.replace.json) or
          not isempty(conf.append.json )
